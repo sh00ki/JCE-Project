@@ -1,0 +1,2 @@
+gcc -Wall server.c slist.c -o test1 -ltalloc -lssl -lcrypto
+
