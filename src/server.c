@@ -18,6 +18,8 @@
 #include "server.h"
 #include "slist.h"
 #define TESTSTRING "ACCESS-ACCEPT"
+#include <openssl/md5.h>
+#include <openssl/hmac.h>
 
 
 static _Thread_local fr_randctx fr_rand_pool;   //!< A pool of pre-generated random integers
@@ -655,15 +657,15 @@ int main(int argc, char **argv) {
       /*
         if till know all is OK we we send to packet to next step
       */
-      received = udp_recv(sockfd, packet->data, packet->data_len, flags,
-      &packet->src_ipaddr, &packet->src_port,
-      &packet->dst_ipaddr, &packet->dst_port,
-      &packet->if_index, &packet->timestamp);
-      if (received < 0)
-      {
-        printf("Error to receiving packet\n"); //TODO : free RADIUS packet
-        return -1;
-      }  
+      // received = udp_recv(sockfd, packet->data, packet->data_len, flags,
+      // &packet->src_ipaddr, &packet->src_port,
+      // &packet->dst_ipaddr, &packet->dst_port,
+      // &packet->if_index, &packet->timestamp);
+      // if (received < 0)
+      // {
+      //   printf("Error to receiving packet\n"); //TODO : free RADIUS packet
+      //   return -1;
+      // }  
           
       #ifdef WITH_VERIFY_PTR
         /*
@@ -679,7 +681,7 @@ int main(int argc, char **argv) {
         }
       #endif
       
-      packet->data_len = received;
+      //packet->data_len = received;
 
       /*
          * need to check again the rfc limitiation because now packet->data_len = received
@@ -703,11 +705,11 @@ int main(int argc, char **argv) {
         break;
       }
       bool require_ma = false;
-      if (!fr_radius_ok(packet, require_ma, NULL)) 
-      {
-        // fr_radius_free(&packet); // TODO : add free function
-        return -1;
-      }
+      // if (!fr_radius_ok(packet, require_ma, NULL)) 
+      // {
+      //   // fr_radius_free(&packet); // TODO : add free function
+      //   return -1;
+      // }
 
   /*
    *  Remember which socket we read the packet from.
@@ -742,10 +744,17 @@ int main(int argc, char **argv) {
         lolo->dst_ipaddr = packet->src_ipaddr;
         lolo->dst_port = packet->src_port;
         RADIUS_PACKET *replay = fr_radius_alloc_reply(ctx,packet);
+        unsigned int len = 16;
+        HMAC_CTX ctx;
+        HMAC_CTX_init(&ctx);
+        HMAC_Init_ex(&ctx, "2ZzMNRpKf574rGW", strlen("2ZzMNRpKf574rGW"), EVP_sha1(), NULL);
+        HMAC_Update(&ctx, (unsigned char*)&replay->vector, len);
+        HMAC_Final(&ctx, replay->vector, &len);
+        HMAC_CTX_cleanup(&ctx);
         //memset(lolo->src_ipaddr,'\0',sizeof(lolo->src_ipaddr ));
         lolo->code = 2;
 
-        nbytes = sendto(sockfd,replay, BUFSIZE,0, (struct sockaddr *) &lolo->cli, sizeof(lolo->cli));
+        nbytes = sendto(sockfd,replay->vector, BUFSIZE,0, (struct sockaddr *) &lolo->cli, sizeof(lolo->cli));
         if (nbytes < 0)
            perror("ERROR in sendto");
         else
@@ -1429,14 +1438,11 @@ RADIUS_PACKET *fr_radius_alloc_reply(TALLOC_CTX *ctx, RADIUS_PACKET *packet)
   reply->src_port = packet->dst_port;
   reply->if_index = packet->if_index;
   reply->id = packet->id;
-  reply->code = 0; /* UNKNOWN code */
-  memcpy(reply->vector, packet->vector, sizeof(reply->vector));
+  reply->code = 0x02; /* UNKNOWN code */
+  //memcpy(reply->vector, packet->vector, sizeof(reply->vector));
   reply->vps = NULL;
   reply->data = 0;
   reply->data_len = 0;
 
-#ifdef WITH_TCP
-  reply->proto = packet->proto;
-#endif
   return reply;
 }
