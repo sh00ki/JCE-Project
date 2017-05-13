@@ -743,7 +743,12 @@ int main(int argc, char **argv) {
         lolo->sockfd = sockfd;
         lolo->dst_ipaddr = packet->src_ipaddr;
         lolo->dst_port = packet->src_port;
-        RADIUS_PACKET *replay = fr_radius_alloc_reply(ctx,packet);
+        RADIUS_PACKET *replay = fr_radius_alloc_reply(ctx,lolo);
+        if (replay == NULL)
+        {
+          printf("Falid with function - fr_radius_alloc_reply\n");
+        }
+        replay->code = 0x02;
         unsigned int len = 16;
         HMAC_CTX ctx;
         HMAC_CTX_init(&ctx);
@@ -752,9 +757,9 @@ int main(int argc, char **argv) {
         HMAC_Final(&ctx, replay->vector, &len);
         HMAC_CTX_cleanup(&ctx);
         //memset(lolo->src_ipaddr,'\0',sizeof(lolo->src_ipaddr ));
-        lolo->code = 2;
+        
 
-        nbytes = sendto(sockfd,replay->vector, BUFSIZE,0, (struct sockaddr *) &lolo->cli, sizeof(lolo->cli));
+        nbytes = sendto(sockfd,replay, sizeof(replay),0, (struct sockaddr *) &replay->cli, sizeof(replay->cli));
         if (nbytes < 0)
            perror("ERROR in sendto");
         else
