@@ -289,7 +289,7 @@ ssize_t udp_recv(int sockfd, void *data, size_t data_len, int flags,
   if (received < 0) return received;
 
   if (!fr_ipaddr_from_sockaddr(&src, sizeof_src, src_ipaddr, &port)) return -1;
-  *src_port = 1812;
+  *src_port = 1811;
 
   if (when && !when->tv_sec) gettimeofday(when, NULL); //get time of day
 
@@ -504,10 +504,10 @@ RADIUS_PACKET *fr_radius_alloc(TALLOC_CTX *ctx, bool new_vector)
 slist_t* slist = NULL;
 int main(int argc, char **argv) {
    int sockfd; /* socket */
-   int portno = 1812; /* port to listen on */
+   int portno = 1811; /* port to listen on */
    //socklen_t clientlen; /* byte size of client's address */
-   struct sockaddr_storage src;
-   socklen_t   sizeof_src = sizeof(src); /* byte size of client's address */
+   // struct sockaddr_storage src;
+  // socklen_t   sizeof_src = sizeof(src); /* byte size of client's address */
    struct sockaddr_in serveraddr; /* server's addr */
    // struct sockaddr_in clientaddr; /* client addr */
    //struct hostent *hostp; /* client host info */
@@ -516,14 +516,17 @@ int main(int argc, char **argv) {
    int optval; /* flag value for setsockopt */
    memset(buf,'\0',BUFSIZE);
    memset((char *) &serveraddr,0,sizeof(serveraddr));
-   int flags=0;
+   // int flags=0;
    /* 
       * socket: create the parent socket 
    */
    sockfd = socket(AF_INET, SOCK_DGRAM, 0);
    if (sockfd < 0) 
       error("ERROR opening socket");
-
+   if(setsockopt(sockfd,SOL_SOCKET,SO_REUSEADDR,&(int){ 1 },sizeof(int)) < 0)
+   {
+      error("setsockopt");
+   }
    /* setsockopt: Handy debugging trick that lets 
     * us rerun the server immediately after we kill it; 
     * otherwise we have to wait about 20 secs. 
@@ -568,8 +571,8 @@ int main(int argc, char **argv) {
   */
     fr_ipaddr_t *src_ipaddr = (fr_ipaddr_t*)malloc(sizeof(fr_ipaddr_t));
     uint16_t *src_port =NULL;
-    ssize_t     received;
-    ssize_t     sent;
+    // ssize_t     received;
+    // ssize_t     sent;
     int nbytes;
     printf("enter to while\n");
     printf("-----------------------------------------\n");
@@ -704,7 +707,7 @@ int main(int argc, char **argv) {
         // fr_radius_free(&packet); //TODO : free function of free packet radius
         break;
       }
-      bool require_ma = false;
+      // bool require_ma = false;
       // if (!fr_radius_ok(packet, require_ma, NULL)) 
       // {
       //   // fr_radius_free(&packet); // TODO : add free function
@@ -735,31 +738,53 @@ int main(int argc, char **argv) {
       }  
        */
        //  server_sendto_replay(sockfd,packet);
+      unsigned char * cat = (unsigned char *)malloc(4096);
       FD_SET(sockfd,&writeset);
       if (FD_ISSET(sockfd,&writeset))
       {
-        RADIUS_PACKET *lolo = slist_pop_first(slist);
+        RADIUS_PACKET *request = slist_pop_first(slist);
         //memcpy(lolo,packet,BUFSIZE);
-        lolo->sockfd = sockfd;
-        lolo->dst_ipaddr = packet->src_ipaddr;
-        lolo->dst_port = packet->src_port;
-        RADIUS_PACKET *replay = fr_radius_alloc_reply(ctx,lolo);
+        request->sockfd = sockfd;
+        request->dst_ipaddr = packet->src_ipaddr;
+        request->dst_port = packet->src_port;
+        RADIUS_PACKET *replay = fr_radius_alloc_reply(ctx,request);
         if (replay == NULL)
         {
           printf("Falid with function - fr_radius_alloc_reply\n");
         }
-        replay->code = 0x02;
-        unsigned int len = 16;
-        HMAC_CTX ctx;
-        HMAC_CTX_init(&ctx);
-        HMAC_Init_ex(&ctx, "2ZzMNRpKf574rGW", strlen("2ZzMNRpKf574rGW"), EVP_sha1(), NULL);
-        HMAC_Update(&ctx, (unsigned char*)&replay->vector, len);
-        HMAC_Final(&ctx, replay->vector, &len);
-        HMAC_CTX_cleanup(&ctx);
-        //memset(lolo->src_ipaddr,'\0',sizeof(lolo->src_ipaddr ));
+        if (request->code == 0x01)
+        {
+            unsigned int len = 16;
+            HMAC_CTX *ctx = HMAC_CTX_new();
+           // HMAC_CTX ctx;
+            HMAC_CTX_reset(&ctx);
+            HMAC_Init_ex(&ctx, "test123", strlen("test123"), EVP_sha1(), NULL);
+            HMAC_Update(&ctx, (unsigned char*)&request->vector, len);
+            HMAC_Final(&ctx, request->vector, &len);
+          request->code = 0x11;
+        }
+        else
+        {
+         // memset(cat, packet->code, 1);
+          memset(cat + 1, packet, 1);
+          memset(cat + 2, (char)packet, 2);
+          memcpy(cat + 4, packet->vector, MD5_DIGEST_LENGTH);
+          memset(cat + 4 + MD5_DIGEST_LENGTH, request, 1);
+          memset(cat + 5 + MD5_DIGEST_LENGTH, request, 1);
+          memcpy(cat + 6 + MD5_DIGEST_LENGTH, request, strlen(request));
+          memset(cat + 6 + MD5_DIGEST_LENGTH + strlen(request), request, 1);
+          memset(cat + 7 + MD5_DIGEST_LENGTH + strlen(request), request, 1);
+          memcpy(cat + 8 + MD5_DIGEST_LENGTH + strlen(request), request, strlen(request));
+          memcpy(cat + 8 + MD5_DIGEST_LENGTH + strlen(request) , "test123", strlen("test123"));
+          MD5(cat, 8 + MD5_DIGEST_LENGTH + strlen(request) + strlen(request) + strlen("test123"), NULL);
+          
+          request->code = 0x02;
+        }
+       
+        // HMAC_CTX_cleanup(&ctx);
         
 
-        nbytes = sendto(sockfd,replay, sizeof(replay),0, (struct sockaddr *) &replay->cli, sizeof(replay->cli));
+        nbytes = sendto(sockfd,request->buf, sizeof(replay),0, (struct sockaddr *) &request->cli, sizeof(request->cli));
         if (nbytes < 0)
            perror("ERROR in sendto");
         else
@@ -1301,27 +1326,7 @@ int sendfromto(int fd, void *buf, size_t len, int flags, struct sockaddr *from, 
   }
 #endif
 
-#  if defined(IPV6_PKTINFO)
-  if (from->sa_family == AF_INET6) {
-    struct sockaddr_in6 *s6 = (struct sockaddr_in6 *) from;
 
-    struct cmsghdr *cmsg;
-    struct in6_pktinfo *pkt;
-
-    msgh.msg_control = cbuf;
-    //msgh.msg_controllen = CMSG_SPACE(sizeof(*pkt));
-
-    cmsg = CMSG_FIRSTHDR(&msgh);
-    cmsg->cmsg_level = IPPROTO_IPV6;
-    cmsg->cmsg_type = IPV6_PKTINFO;
-    //cmsg->cmsg_len = CMSG_LEN(sizeof(*pkt));
-
-    pkt = (struct in6_pktinfo *) CMSG_DATA(cmsg);
-    //memset(pkt, 0, sizeof(*pkt));
-    //pkt->ipi6_addr = s6->sin6_addr;
-    //pkt->ipi6_ifindex = if_index;
-  }
-#  endif  /* IPV6_PKTINFO */
 
   return sendmsg(fd, &msgh, flags);
 }

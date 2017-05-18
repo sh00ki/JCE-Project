@@ -17,6 +17,8 @@
 #define PW_VENDOR_SPECIFIC 26
 #define UDP_UNUSED
 #define MD5_DIGEST_LENGTH 16
+#define MAX_PACKET_LEN 4096
+#define AUTH_HDR_LEN 20
 
 
 #define mix(a,b,c,d,e,f,g,h) \

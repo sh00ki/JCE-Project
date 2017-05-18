@@ -36,11 +36,9 @@ class Server(server.Server):
 	    #"NAS-Port-Type" : 19,
 	    "MS-MPPE-Encryption-Types" : "RC4-40or128-bit-Allowed",
 	    #"MS-MPPE-Send-Key" : req.PwDecrypt("aa"),
-	    "MS-MPPE-Send-Key" : "0x796ee09db470a883c4621e8b5ff08919",
-	    "MS-MPPE-Recv-Key" : "0x9c88acc82ec687eb8ca9cec964c91dd4",
             #"Packet-Type" : "Access-Challenge",
 	    #"Class" : "0x20",
-	    "Message-Authenticator" : "0x00000000000000000000000000000000",
+	    "Message-Authenticator" : self.ReplyPacket(),
             #"Vendor-Specific" : "Microsoft" AVP: l=18 t=Message-Authenticator(80): 5ee1617c9061372a4edb29e77a9500b7
 	    #"Authenticator": "0x23191919191919191919191919"
         })
@@ -51,7 +49,22 @@ class Server(server.Server):
 	#reqlay = self.CreateAuthPacket()
         
         self.SendReplyPacket(pkt.fd, replay)
-        
+    def sign_request():
+
+	    from hashlib import sha1
+	    import hmac
+
+	    # key = CONSUMER_SECRET& #If you dont have a token yet
+	    key = "2ZzMNRpKf574rGW" 
+
+
+	    # The Base String as specified here: 
+	    raw = "128" # as specified by oauth
+
+	    hashed = hmac.new(key, raw, sha1)
+
+	    # The signature
+	    return hashed.digest().encode("base64").rstrip('\n')
 	
 
 if __name__ == '__main__':
