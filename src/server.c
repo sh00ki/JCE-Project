@@ -104,10 +104,6 @@ typedef struct radius_packet {
   uint8_t buf[BUFSIZE];
   uint32_t          rounds;     //!< for State[0]
 
-#ifdef WITH_TCP
-  size_t      partial;
-  int     proto;
-#endif
 } RADIUS_PACKET;
 
 int fr_ipaddr_from_sockaddr(struct sockaddr_storage const *sa, socklen_t salen, fr_ipaddr_t *ipaddr, uint16_t *port);
