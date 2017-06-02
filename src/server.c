@@ -104,6 +104,10 @@ typedef struct radius_packet {
   uint8_t buf[BUFSIZE];
   uint32_t          rounds;     //!< for State[0]
 
+#ifdef WITH_TCP
+  size_t      partial;
+  int     proto;
+#endif
 } RADIUS_PACKET;
 
 int fr_ipaddr_from_sockaddr(struct sockaddr_storage const *sa, socklen_t salen, fr_ipaddr_t *ipaddr, uint16_t *port);
@@ -501,18 +505,11 @@ slist_t* slist = NULL;
 int main(int argc, char **argv) {
    int sockfd; /* socket */
    int portno = 1811; /* port to listen on */
-   //socklen_t clientlen; /* byte size of client's address */
-   // struct sockaddr_storage src;
-  // socklen_t   sizeof_src = sizeof(src); /* byte size of client's address */
    struct sockaddr_in serveraddr; /* server's addr */
-   // struct sockaddr_in clientaddr; /* client addr */
-   //struct hostent *hostp; /* client host info */
    uint8_t buf[BUFSIZE]; /* message buf */
-   //char *hostaddrp; /* dotted decimal host addr string */
    int optval; /* flag value for setsockopt */
    memset(buf,'\0',BUFSIZE);
    memset((char *) &serveraddr,0,sizeof(serveraddr));
-   // int flags=0;
    /* 
       * socket: create the parent socket 
    */
@@ -559,16 +556,11 @@ int main(int argc, char **argv) {
   slist_init(slist);
   printf("init TALLOC_CTX\n");
   TALLOC_CTX *ctx = NULL;
-
-  
-  //clientlen = sizeof(clientaddr);
   /* 
     * main loop: wait for a datagram, then echo it
   */
     fr_ipaddr_t *src_ipaddr = (fr_ipaddr_t*)malloc(sizeof(fr_ipaddr_t));
     uint16_t *src_port =NULL;
-    // ssize_t     received;
-    // ssize_t     sent;
     int nbytes;
     printf("enter to while\n");
     printf("-----------------------------------------\n");
@@ -604,42 +596,17 @@ int main(int argc, char **argv) {
 
       
 
-      /* 
-         * gethostbyaddr: determine who sent the datagram
-      
-      hostp = gethostbyaddr((const char *)&clientaddr.sin_addr.s_addr,sizeof(clientaddr.sin_addr.s_addr), AF_INET);
-      if (hostp == NULL)
-         error("ERROR on gethostbyaddr");
-      */
-      /*
-      hostaddrp = inet_ntoa(src.sin_addr); // get the ip address of router
-      if (hostaddrp == NULL)
-         error("ERROR on inet_ntoa\n");
-      
-      
-      printf("server received datagram from %s (%s)\n", hostp->h_name, hostaddrp);
-      */
-      //printf("server received %lu/%d bytes: %s\n", strlen(buf), packet->data_len, buf); //TODO : FIX the printf
-      
-
 
 
       printf("Start to recvived datagram !\n");
-      //packet->src_ip = hostaddrp;
       packet->src_port = htons((unsigned short)portno);
-      //packet->dst_ip = serveraddr.sin_addr.s_addr;
       
       if (!fr_ipaddr_from_sockaddr(&packet->cli, packet->cli_len, src_ipaddr, src_port)) {
         printf("Unknown address family");
-        //udp_recv_discard(sockfd); //TODO : discard recv
-
         return -1;
       }
 
       if (packet->data_len < 4) {
-        //char buffer[INET6_ADDRSTRLEN];
-
-        //udp_recv_discard(sockfd); //TODO : discard recv
 
         return 0;
       }
@@ -653,20 +620,7 @@ int main(int argc, char **argv) {
       packet->data = talloc_array(packet, uint8_t, packet_len);
       packet->data_len = packet_len;
       if (!packet->data) return -1;
-      /*
-        if till know all is OK we we send to packet to next step
-      */
-      // received = udp_recv(sockfd, packet->data, packet->data_len, flags,
-      // &packet->src_ipaddr, &packet->src_port,
-      // &packet->dst_ipaddr, &packet->dst_port,
-      // &packet->if_index, &packet->timestamp);
-      // if (received < 0)
-      // {
-      //   printf("Error to receiving packet\n"); //TODO : free RADIUS packet
-      //   return -1;
-      // }  
-          
-      #ifdef WITH_VERIFY_PTR
+
         /*
          *  Double-check that the fields we want are filled in.
         */
@@ -674,14 +628,10 @@ int main(int argc, char **argv) {
             (packet->src_port == 0) ||
             (packet->dst_ipaddr.af == AF_UNSPEC) ||
             (packet->dst_port == 0)) {
-          printf("Error receiving packet: %s", fr_syserror(errno));
-          fr_radius_free(&packet);
-          return NULL;
+          printf("Error receiving packet: %d", (errno));
+          //fr_radius_free(&packet);
+          return -1;
         }
-      #endif
-      
-      //packet->data_len = received;
-
       /*
          * need to check again the rfc limitiation because now packet->data_len = received
       */
@@ -703,13 +653,7 @@ int main(int argc, char **argv) {
         // fr_radius_free(&packet); //TODO : free function of free packet radius
         break;
       }
-      // bool require_ma = false;
-      // if (!fr_radius_ok(packet, require_ma, NULL)) 
-      // {
-      //   // fr_radius_free(&packet); // TODO : add free function
-      //   return -1;
-      // }
-
+      
   /*
    *  Remember which socket we read the packet from.
    */
@@ -719,20 +663,6 @@ int main(int argc, char **argv) {
   // fclose(fr_log_fp);
 
 
-  //sendfromto(packet->sockfd , buf, packet->data_len,0, struct sockaddr *from, socklen_t from_len, (struct sockaddr *) &src, tl, int if_index)
-
-      /*
-         * sendto: echo the input back to the client 
-     
-      sent = udp_send(packet->sockfd, TESTSTRING, packet->data_len, 0,
-      &packet->src_ipaddr, packet->src_port, packet->if_index,
-      &packet->dst_ipaddr, packet->dst_port);
-      if (sent < 0)
-      {
-        printf("Error to sent packet\n"); //TODO : free RADIUS packet
-        
-      }  
-       */
        //  server_sendto_replay(sockfd,packet);
       unsigned char * cat = (unsigned char *)malloc(4096);
       FD_SET(sockfd,&writeset);
