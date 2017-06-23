@@ -484,7 +484,7 @@ RADIUS_PACKET *fr_radius_alloc(TALLOC_CTX *ctx, bool new_vector)
 
 slist_t* slist = NULL;
 int main(int argc, char **argv) {
-   printf("RADIUS SERVER START\n----------------------\n");
+   printf("Final Project JCE-2017\n> RADIUS SERVER START...\n----------------------\n");
    int sockfd; /* socket */
    int portno = 1811; /* port to listen on */
    struct sockaddr_in serveraddr; /* server's addr */
@@ -523,13 +523,13 @@ int main(int argc, char **argv) {
       bind: associate the parent socket with a port 
    */
       
-   printf("Open connection to bind for new user connection\n");
+   printf("> Open connection to bind for new user connection...\n");
    if (bind(sockfd, (struct sockaddr *) &serveraddr,sizeof(serveraddr)) < 0) 
       error("ERROR on binding");
 
   
   fd_set readset,writeset;
-  printf("Initial List For New Connection\n");
+  printf("> Initial List For New Connection...\n");
   slist = (slist_t*)calloc(1,sizeof(slist_t));
   if (slist == NULL)
   {
@@ -544,7 +544,7 @@ int main(int argc, char **argv) {
     fr_ipaddr_t *src_ipaddr = (fr_ipaddr_t*)malloc(sizeof(fr_ipaddr_t));
     uint16_t *src_port =NULL;
     int nbytes;
-    printf("Ready For Requests\n");
+    printf("> Ready For Requests...\n");
     printf("-----------------------------------------\n");
     while (1) {
       FD_ZERO(&readset);
