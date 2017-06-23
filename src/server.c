@@ -104,10 +104,6 @@ typedef struct radius_packet {
   uint8_t buf[BUFSIZE];
   uint32_t          rounds;     //!< for State[0]
 
-#ifdef WITH_TCP
-  size_t      partial;
-  int     proto;
-#endif
 } RADIUS_PACKET;
 
 int fr_ipaddr_from_sockaddr(struct sockaddr_storage const *sa, socklen_t salen, fr_ipaddr_t *ipaddr, uint16_t *port);
@@ -180,23 +176,8 @@ int fr_ipaddr_from_sockaddr(struct sockaddr_storage const *sa, socklen_t salen, 
     ipaddr->af = AF_INET;
     ipaddr->prefix = 32;
     ipaddr->ipaddr.ip4addr = s4.sin_addr;
-    //if (port) *port = ntohs(s4.sin_port); //TODO - what is mean this if?
-#ifdef HAVE_STRUCT_SOCKADDR_IN6
-  } else if (sa->ss_family == AF_INET6) {
-    struct sockaddr_in6 s6;
+   
 
-    if (salen < sizeof(s6)) {
-      fr_strerror_printf("IPv6 address is too small");
-      return 0;
-    }
-
-    memcpy(&s6, sa, sizeof(s6));
-    ipaddr->af = AF_INET6;
-    ipaddr->prefix = 128;
-    ipaddr->ipaddr.ip6addr = s6.sin6_addr;
-    if (port) *port = ntohs(s6.sin6_port);
-    ipaddr->zone_id = s6.sin6_scope_id;
-#endif
 
   } else {
     printf("Unsupported address famility %d\n",
@@ -703,7 +684,7 @@ int main(int argc, char **argv) {
           memcpy(cat + 8 + MD5_DIGEST_LENGTH + strlen(request), request, strlen(request));
           memcpy(cat + 8 + MD5_DIGEST_LENGTH + strlen(request) , "phone", strlen("phone"));
           memcpy(cat + 9 + MD5_DIGEST_LENGTH + strlen(request) , "test123", strlen("test123"));
-          MD5(cat, 9 + MD5_DIGEST_LENGTH + strlen(request) + strlen(request) + strlen("test123"), NULL);
+          MD5(cat, 9 + MD5_DIGEST_LENGTH + strlen(request) + strlen(request) + "test123" + strlen("test123"), NULL);
           
           request->code = 0x02;
         }
@@ -1291,23 +1272,7 @@ ssize_t udp_send(int sockfd, void *data, size_t data_len, int flags,
       return -1;
     }
 
-#ifdef WITH_UDPFROMTO
-    /*
-     *  And if they don't specify a source IP address, don't
-     *  use udpfromto.
-     */
-    if ((src_ipaddr->af != AF_UNSPEC) && (dst_ipaddr->af != AF_UNSPEC) &&
-        !fr_is_inaddr_any(src_ipaddr)) {
-      struct sockaddr_storage src;
-      socklen_t   sizeof_src;
 
-      fr_ipaddr_to_sockaddr(src_ipaddr, src_port, &src, &sizeof_src);
-
-      rcode = sendfromto(sockfd, data, data_len, 0,
-             (struct sockaddr *)&src, sizeof_src,
-             (struct sockaddr *)&dst, sizeof_dst, if_index);
-    } else
-#endif
       printf("rcode with NO UDPFROMTO\n");
       rcode = sendto(sockfd, data, data_len, 0,(struct sockaddr *) &dst, sizeof_dst);
   }
@@ -1336,19 +1301,8 @@ int fr_ipaddr_to_sockaddr(fr_ipaddr_t const *ipaddr, uint16_t port, struct socka
     memset(sa, 0, sizeof(*sa));
     memcpy(sa, &s4, sizeof(s4));
 
-  } else if (ipaddr->af == AF_INET6) {
-    struct sockaddr_in6 s6;
-    printf("The AF_INET is IPv6\n");
-    *salen = sizeof(s6);
-
-    memset(&s6, 0, sizeof(s6));
-    s6.sin6_family = AF_INET6;
-    s6.sin6_addr = ipaddr->ipaddr.ip6addr;
-    s6.sin6_port = htons(port);
-    s6.sin6_scope_id = ipaddr->zone_id;
-    memset(sa, 0, sizeof(*sa));
-    memcpy(sa, &s6, sizeof(s6));
-  } else {
+  } 
+  else {
     return 0;
   }
   printf("fr_ipaddr_to_sockaddr completed! return to udp_send\n");
