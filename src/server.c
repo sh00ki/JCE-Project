@@ -610,9 +610,9 @@ int main(int argc, char **argv) {
             (packet->src_port == 0) ||
             (packet->dst_ipaddr.af == AF_UNSPEC) ||
             (packet->dst_port == 0)) {
-          printf("Error receiving packet: %d", (errno));
+          //printf("Error receiving packet: %d", (errno));
           //fr_radius_free(&packet);
-          return -1;
+          //return -1;
         }
       /*
          * need to check again the rfc limitiation because now packet->data_len = received
