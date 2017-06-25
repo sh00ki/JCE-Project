@@ -573,14 +573,14 @@ int main(int argc, char **argv) {
            perror("ERROR in recvfrom");
         memcpy(buf,packet->buf,BUFSIZE);
         slist_append(slist,packet);
-        printf("recvfrom DONE!\n");
+        printf("> New Client try to connect...\n");
       }
 
       
 
 
 
-      printf("Start to recvived datagram !\n");
+      printf("> Start to recvived datagram...\n");
       packet->src_port = htons((unsigned short)portno);
       
       if (!fr_ipaddr_from_sockaddr(&packet->cli, packet->cli_len, src_ipaddr, src_port)) {
@@ -606,14 +606,14 @@ int main(int argc, char **argv) {
         /*
          *  Double-check that the fields we want are filled in.
         */
-        if ((packet->src_ipaddr.af == AF_UNSPEC) ||
-            (packet->src_port == 0) ||
-            (packet->dst_ipaddr.af == AF_UNSPEC) ||
-            (packet->dst_port == 0)) {
-          //printf("Error receiving packet: %d", (errno));
-          //fr_radius_free(&packet);
-          //return -1;
-        }
+        // if ((packet->src_ipaddr.af == AF_UNSPEC) ||
+        //     (packet->src_port == 0) ||
+        //     (packet->dst_ipaddr.af == AF_UNSPEC) ||
+        //     (packet->dst_port == 0)) {
+        //   printf("Error receiving packet: %d", (errno));
+        //   //fr_radius_free(&packet);
+        //   return -1;
+        // }
       /*
          * need to check again the rfc limitiation because now packet->data_len = received
       */
@@ -623,6 +623,7 @@ int main(int argc, char **argv) {
         free(packet);
         break;
       }
+      printf("> validate_packet_radius Done...\n");
 
         /*
          *  Read no data.  Continue.
@@ -635,7 +636,7 @@ int main(int argc, char **argv) {
         // fr_radius_free(&packet); //TODO : free function of free packet radius
         break;
       }
-      
+      printf("> Socket is ready...\n");
   /*
    *  Remember which socket we read the packet from.
    */
@@ -651,17 +652,21 @@ int main(int argc, char **argv) {
       if (FD_ISSET(sockfd,&writeset))
       {
         RADIUS_PACKET *request = slist_pop_first(slist);
+        printf("> Get Packet from query...\n");
         //memcpy(lolo,packet,BUFSIZE);
         request->sockfd = sockfd;
         request->dst_ipaddr = packet->src_ipaddr;
         request->dst_port = packet->src_port;
         RADIUS_PACKET *replay = fr_radius_alloc_reply(ctx,request);
+        printf("> Allocate replay packet for new user...\n");
         if (replay == NULL)
         {
           printf("Falid with function - fr_radius_alloc_reply\n");
         }
-        if (request->code == 0x01)
+        
+        if (request->code)
         {
+            printf("> request->code --- > challange");
             unsigned int len = 16;
             HMAC_CTX *ctx = HMAC_CTX_new();
            // HMAC_CTX ctx;
@@ -669,14 +674,19 @@ int main(int argc, char **argv) {
             HMAC_Init_ex(&ctx, "test123", strlen("test123"), EVP_sha1(), NULL);
             HMAC_Update(&ctx, (unsigned char*)&request->vector, len);
             HMAC_Final(&ctx, request->vector, &len);
-          request->code = 0x11;
+            request->code = 0x11;
+            printf("> Send challange packet to AP... waiting for client...\n");
+            nbytes = sendto(sockfd,request->buf, sizeof(replay),0, (struct sockaddr *) &request->cli, sizeof(request->cli));
+            if (nbytes < 0)
+               perror("ERROR in sendto");
         }
         else
         {
+          printf("> Request code is replay...\n");
          // memset(cat, packet->code, 1);
-          memset(cat + 1, packet, 1);
-          memset(cat + 2, (char)packet, 2);
-          memcpy(cat + 4, packet->vector, MD5_DIGEST_LENGTH);
+          memset(cat + 1, request, 1);
+          memset(cat + 2, (char)request, 2);
+          memcpy(cat + 4, request->vector, MD5_DIGEST_LENGTH);
           memset(cat + 4 + MD5_DIGEST_LENGTH, request, 1);
           memset(cat + 5 + MD5_DIGEST_LENGTH, request, 1);
           memcpy(cat + 6 + MD5_DIGEST_LENGTH, request, strlen(request));
@@ -685,19 +695,17 @@ int main(int argc, char **argv) {
           memcpy(cat + 8 + MD5_DIGEST_LENGTH + strlen(request), request, strlen(request));
           memcpy(cat + 8 + MD5_DIGEST_LENGTH + strlen(request) , "phone", strlen("phone"));
           memcpy(cat + 9 + MD5_DIGEST_LENGTH + strlen(request) , "test123", strlen("test123"));
-          MD5(cat, 9 + MD5_DIGEST_LENGTH + strlen(request) + strlen(request) + "test123" + strlen("test123"), NULL);
-          
+          //MD5(cat, 9 + MD5_DIGEST_LENGTH + strlen(request) + strlen(request) + "test123" + strlen("test123"), response_auth);
           request->code = 0x02;
+          printf("> Send reject packet to AP... New user diagreed\n");
+          nbytes = sendto(sockfd,request->buf, sizeof(replay),0, (struct sockaddr *) &request->cli, sizeof(request->cli));
+          if (nbytes < 0)
+             perror("ERROR in sendto");      
         }
        
         // HMAC_CTX_cleanup(&ctx);
         
-
-        nbytes = sendto(sockfd,request->buf, sizeof(replay),0, (struct sockaddr *) &request->cli, sizeof(request->cli));
-        if (nbytes < 0)
-           perror("ERROR in sendto");
-        else
-           printf("sendto DONE!\n");
+       
       }
       FD_ZERO(&writeset);
   }
