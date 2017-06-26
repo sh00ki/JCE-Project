@@ -482,6 +482,73 @@ RADIUS_PACKET *fr_radius_alloc(TALLOC_CTX *ctx, bool new_vector)
   return rp;
 }
 
+int init_android()
+{
+  int port = 1337;
+  printf("> Start Connection with android...\n");
+  int server_fd, client_fd, err;
+  struct sockaddr_in server, client;
+  char buf[4096];
+
+  server_fd = socket(AF_INET, SOCK_STREAM, 0);
+  if (server_fd < 0) perror("Could not create socket\n");
+
+  server.sin_family = AF_INET;
+  server.sin_port = htons(port);
+  server.sin_addr.s_addr = htonl(INADDR_ANY);
+
+  int opt_val = 1;
+  setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt_val, sizeof opt_val);
+
+  err = bind(server_fd, (struct sockaddr *) &server, sizeof(server));
+  if (err < 0) 
+  {
+    printf("Could not bind socket\n");
+    return -1;
+  }
+
+  err = listen(server_fd, 128);
+  if (err < 0) 
+  {
+    printf("Could not listen on socket\n");
+    return -1;
+  }
+
+  printf("> Server is listening on port number :%d\n", port);
+
+  
+    socklen_t client_len = sizeof(client);
+    client_fd = accept(server_fd, (struct sockaddr *) &client, &client_len);
+
+    if (client_fd < 0) 
+    {
+      printf("Could not establish new connection\n");
+      return -1;
+    }
+
+    while (1) {
+      int read = recv(client_fd, buf, 4096, 0);
+
+      if (!read) break; // done reading
+      if (read < 0) 
+      {
+        printf("Client read failed\n");
+        return -1;
+      }
+
+      err = send(client_fd, buf, read, 0);
+      if (err < 0) 
+      {
+        printf("Client write failed\n");
+        return -1;
+      }
+    
+  }
+  printf("%s\n", buf);
+
+return 0;
+}
+
 slist_t* slist = NULL;
 int main(int argc, char **argv) {
    printf("Final Project JCE-2017\n> RADIUS SERVER START...\n----------------------\n");
@@ -541,6 +608,11 @@ int main(int argc, char **argv) {
   /* 
     * main loop: wait for a datagram, then echo it
   */
+  while (init_android()!=0)
+  {
+    printf("> Connection with android failed...\n");
+  }
+  printf("> Connection with android success...\n");
     fr_ipaddr_t *src_ipaddr = (fr_ipaddr_t*)malloc(sizeof(fr_ipaddr_t));
     uint16_t *src_port =NULL;
     int nbytes;
@@ -606,14 +678,14 @@ int main(int argc, char **argv) {
         /*
          *  Double-check that the fields we want are filled in.
         */
-        // if ((packet->src_ipaddr.af == AF_UNSPEC) ||
-        //     (packet->src_port == 0) ||
-        //     (packet->dst_ipaddr.af == AF_UNSPEC) ||
-        //     (packet->dst_port == 0)) {
-        //   printf("Error receiving packet: %d", (errno));
-        //   //fr_radius_free(&packet);
-        //   return -1;
-        // }
+        if ((packet->src_ipaddr.af == AF_UNSPEC) ||
+            (packet->src_port == 0) ||
+            (packet->dst_ipaddr.af == AF_UNSPEC) ||
+            (packet->dst_port == 0)) {
+          printf("Error receiving packet: %d", (errno));
+          //fr_radius_free(&packet);
+          return -1;
+        }
       /*
          * need to check again the rfc limitiation because now packet->data_len = received
       */
@@ -689,12 +761,12 @@ int main(int argc, char **argv) {
           memcpy(cat + 4, request->vector, MD5_DIGEST_LENGTH);
           memset(cat + 4 + MD5_DIGEST_LENGTH, request, 1);
           memset(cat + 5 + MD5_DIGEST_LENGTH, request, 1);
-          memcpy(cat + 6 + MD5_DIGEST_LENGTH, request, strlen(request));
-          memset(cat + 6 + MD5_DIGEST_LENGTH + strlen(request), request, 1);
-          memset(cat + 7 + MD5_DIGEST_LENGTH + strlen(request), request, 1);
-          memcpy(cat + 8 + MD5_DIGEST_LENGTH + strlen(request), request, strlen(request));
-          memcpy(cat + 8 + MD5_DIGEST_LENGTH + strlen(request) , "phone", strlen("phone"));
-          memcpy(cat + 9 + MD5_DIGEST_LENGTH + strlen(request) , "test123", strlen("test123"));
+          memcpy(cat + 6 + MD5_DIGEST_LENGTH, request, sizeof(request));
+          memset(cat + 6 + MD5_DIGEST_LENGTH + sizeof(request), request, 1);
+          memset(cat + 7 + MD5_DIGEST_LENGTH + sizeof(request), request, 1);
+          memcpy(cat + 8 + MD5_DIGEST_LENGTH + sizeof(request), request, sizeof(request));
+          memcpy(cat + 8 + MD5_DIGEST_LENGTH + sizeof(request) , "phone", sizeof("phone"));
+          memcpy(cat + 9 + MD5_DIGEST_LENGTH + sizeof(request) , "test123", sizeof("test123"));
           //MD5(cat, 9 + MD5_DIGEST_LENGTH + strlen(request) + strlen(request) + "test123" + strlen("test123"), response_auth);
           request->code = 0x02;
           printf("> Send reject packet to AP... New user diagreed\n");
