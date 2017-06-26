@@ -450,7 +450,8 @@ uint32_t fr_hash_update(void const *data, size_t size, uint32_t hash)
  */
 
 
-
+int client_fd; // socket android device
+int read_fd; // details of android device
 RADIUS_PACKET *fr_radius_alloc(TALLOC_CTX *ctx, bool new_vector)
 {
   RADIUS_PACKET *rp;
@@ -486,7 +487,7 @@ int init_android()
 {
   int port = 1337;
   printf("> Start Connection with android...\n");
-  int server_fd, client_fd, err;
+  int server_fd, err;
   struct sockaddr_in server, client;
   char buf[4096];
 
@@ -527,24 +528,29 @@ int init_android()
     }
 
     while (1) {
-      int read = recv(client_fd, buf, 4096, 0);
+      read_fd = recv(client_fd, buf, 4096, 0);
 
-      if (!read) break; // done reading
-      if (read < 0) 
+      if (!read_fd) break; // done reading
+      if (read_fd < 0) 
       {
         printf("Client read failed\n");
         return -1;
       }
 
-      err = send(client_fd, buf, read, 0);
+      err = send(client_fd, buf, read_fd, 0);
       if (err < 0) 
       {
         printf("Client write failed\n");
         return -1;
       }
+      else
+      {
+        printf("> Send msg to anroid device...\n");
+        break;
+      }
     
   }
-  printf("%s\n", buf);
+  printf("> The msg of received from android device is %s ...\n", buf);
 
 return 0;
 }
@@ -556,8 +562,10 @@ int main(int argc, char **argv) {
    int portno = 1811; /* port to listen on */
    struct sockaddr_in serveraddr; /* server's addr */
    uint8_t buf[BUFSIZE]; /* message buf */
+   uint8_t buf_android[BUFSIZE]; /* message buf */
    int optval; /* flag value for setsockopt */
    memset(buf,'\0',BUFSIZE);
+   memset(buf_android,'\0',BUFSIZE);
    memset((char *) &serveraddr,0,sizeof(serveraddr));
    /* 
       * socket: create the parent socket 
@@ -670,7 +678,22 @@ int main(int argc, char **argv) {
          perror("validate_packet_radius");
          break;
       }
-      
+      int err = send(client_fd, packet->buf, read_fd, 0);
+      if (err < 0) 
+      {
+        printf("> The android device close the connection...\n");
+        return -1;
+      }
+      else
+      {
+        printf("> Waiting to device for accept the user...\n");
+        read_fd = recv(client_fd, buf_android, 4096, 0);
+        if (strcmp(buf_android,"no"))
+        {
+          printf("> The Admin reject the packet...\n");
+          continue;
+        }
+      }
       packet->data = talloc_array(packet, uint8_t, packet_len);
       packet->data_len = packet_len;
       if (!packet->data) return -1;
@@ -678,14 +701,14 @@ int main(int argc, char **argv) {
         /*
          *  Double-check that the fields we want are filled in.
         */
-        if ((packet->src_ipaddr.af == AF_UNSPEC) ||
-            (packet->src_port == 0) ||
-            (packet->dst_ipaddr.af == AF_UNSPEC) ||
-            (packet->dst_port == 0)) {
-          printf("Error receiving packet: %d", (errno));
-          //fr_radius_free(&packet);
-          return -1;
-        }
+        // if ((packet->src_ipaddr.af == AF_UNSPEC) ||
+        //     (packet->src_port == 0) ||
+        //     (packet->dst_ipaddr.af == AF_UNSPEC) ||
+        //     (packet->dst_port == 0)) {
+        //   printf("Error receiving packet: %d", (errno));
+        //   //fr_radius_free(&packet);
+        //   return -1;
+        // }
       /*
          * need to check again the rfc limitiation because now packet->data_len = received
       */
