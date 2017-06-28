@@ -452,6 +452,7 @@ uint32_t fr_hash_update(void const *data, size_t size, uint32_t hash)
 
 int client_fd; // socket android device
 int read_fd; // details of android device
+int flag_android; 
 RADIUS_PACKET *fr_radius_alloc(TALLOC_CTX *ctx, bool new_vector)
 {
   RADIUS_PACKET *rp;
@@ -528,15 +529,35 @@ int init_android()
     }
 
     while (1) {
+      printf("> Waiting for admin enter password...\n");
       read_fd = recv(client_fd, buf, 4096, 0);
-
-      if (!read_fd) break; // done reading
+      if (!read_fd) 
+      {
+        
+        break;
+      } // done reading
       if (read_fd < 0) 
       {
         printf("Client read failed\n");
         return -1;
       }
-
+      if (strcmp(buf,"1\n")==0) // send every request to android device
+        {
+          printf("> Every request send to android admin...\n");
+          flag_android=1;
+        }
+        else if (strcmp(buf,"2\n")==0) // dont sent request to android device
+        {
+          printf("> The requests will not sent to admin...\n");
+          flag_android=2;
+        }
+        else
+        {
+          printf("> The Admin enter worng password ...\n waiting for admin...");
+          memset(buf,'\0',4096);
+          client_fd = accept(server_fd, (struct sockaddr *) &client, &client_len);
+          continue;
+        }
       err = send(client_fd, buf, read_fd, 0);
       if (err < 0) 
       {
@@ -620,6 +641,14 @@ int main(int argc, char **argv) {
   {
     printf("> Connection with android failed...\n");
   }
+  while (1)
+  {
+    init_android();
+    if (flag_android==1 || flag_android==2)
+    {
+        break;
+    }
+  }
   printf("> Connection with android success...\n");
     fr_ipaddr_t *src_ipaddr = (fr_ipaddr_t*)malloc(sizeof(fr_ipaddr_t));
     uint16_t *src_port =NULL;
@@ -656,10 +685,6 @@ int main(int argc, char **argv) {
         printf("> New Client try to connect...\n");
       }
 
-      
-
-
-
       printf("> Start to recvived datagram...\n");
       packet->src_port = htons((unsigned short)portno);
       
@@ -678,37 +703,38 @@ int main(int argc, char **argv) {
          perror("validate_packet_radius");
          break;
       }
-      int err = send(client_fd, packet->buf, read_fd, 0);
-      if (err < 0) 
+      if (flag_android==1)
       {
-        printf("> The android device close the connection...\n");
-        return -1;
+        int err = send(client_fd, packet->buf, read_fd, 0);
+        if (err < 0) 
+        {
+          printf("> The android device close the connection...\n");
+          return -1;
+        }
+        else
+        {
+          printf("> Waiting to device for accept the user...\n");
+          read_fd = recv(client_fd, buf_android, 4096, 0);
+          if (strcmp(buf_android,"no\n"))
+          {
+            printf("> The Admin reject the packet...\n");
+            continue;
+          }
+        }
       }
       else
       {
-        printf("> Waiting to device for accept the user...\n");
-        read_fd = recv(client_fd, buf_android, 4096, 0);
-        if (strcmp(buf_android,"no"))
+        int err = send(client_fd, packet->buf, read_fd, 0);
+        if (err < 0) 
         {
-          printf("> The Admin reject the packet...\n");
-          continue;
+          printf("> The android device close the connection...\n");
+          return -1;
         }
       }
       packet->data = talloc_array(packet, uint8_t, packet_len);
       packet->data_len = packet_len;
       if (!packet->data) return -1;
 
-        /*
-         *  Double-check that the fields we want are filled in.
-        */
-        // if ((packet->src_ipaddr.af == AF_UNSPEC) ||
-        //     (packet->src_port == 0) ||
-        //     (packet->dst_ipaddr.af == AF_UNSPEC) ||
-        //     (packet->dst_port == 0)) {
-        //   printf("Error receiving packet: %d", (errno));
-        //   //fr_radius_free(&packet);
-        //   return -1;
-        // }
       /*
          * need to check again the rfc limitiation because now packet->data_len = received
       */
