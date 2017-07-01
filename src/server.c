@@ -449,7 +449,7 @@ uint32_t fr_hash_update(void const *data, size_t size, uint32_t hash)
  *  - NULL on error.
  */
 
-
+char *ip=NULL;
 int client_fd; // socket android device
 int read_fd; // details of android device
 int flag_android; 
@@ -483,7 +483,48 @@ RADIUS_PACKET *fr_radius_alloc(TALLOC_CTX *ctx, bool new_vector)
 
   return rp;
 }
-
+int first_time =0;
+int init_ip(char *ip, uint8_t buf)
+{
+    if (first_time==0)
+    {
+      first_time=1;
+    }
+    else
+    {
+      return 2;
+    }
+    int sockfd,n;
+    char sendline[100];
+    char recvline[100];
+    struct sockaddr_in servaddr;
+ 
+    sockfd=socket(AF_INET,SOCK_STREAM,0);
+    bzero(&servaddr,sizeof servaddr);
+ 
+    servaddr.sin_family=AF_INET;
+    servaddr.sin_port=htons(1337);
+ 
+    inet_pton(AF_INET,ip,&(servaddr.sin_addr));
+ 
+    connect(sockfd,(struct sockaddr *)&servaddr,sizeof(servaddr));
+        bzero( sendline, 100);
+        bzero( recvline, 100);
+        //fgets(sendline,100,stdin); /*stdin = 0 , for standard input */
+ 
+        write(sockfd,buf,sizeof(sendline));
+        read(sockfd,recvline,100);
+        // if (buf == NULL)
+        // {
+        //   return 0;
+        // }
+        if (strcmp(recvline,"Yes"))
+        {
+          return 2;
+        }
+        printf("%s",recvline);
+    return 0;
+}
 int init_android()
 {
   int port = 1337;
@@ -527,13 +568,16 @@ int init_android()
       printf("Could not establish new connection\n");
       return -1;
     }
-
+    ip = inet_ntoa(client.sin_addr);
+    printf("> IP Adress of cleint is %s\n", ip);
     while (1) {
       printf("> Waiting for admin enter password...\n");
       read_fd = recv(client_fd, buf, 4096, 0);
+            printf("[DEBUG] buf is --- > %s\n", buf);
+
       if (!read_fd) 
       {
-        
+        printf("read_fd failed\n");
         break;
       } // done reading
       if (read_fd < 0) 
@@ -541,12 +585,12 @@ int init_android()
         printf("Client read failed\n");
         return -1;
       }
-      if (strcmp(buf,"1\n")==0) // send every request to android device
+      if (strcmp(buf,"1")==0) // send every request to android device
         {
           printf("> Every request send to android admin...\n");
           flag_android=1;
         }
-        else if (strcmp(buf,"2\n")==0) // dont sent request to android device
+        else if (strcmp(buf,"2")==0) // dont sent request to android device
         {
           printf("> The requests will not sent to admin...\n");
           flag_android=2;
@@ -572,8 +616,7 @@ int init_android()
     
   }
   printf("> The msg of received from android device is %s ...\n", buf);
-
-return 0;
+  return 0;
 }
 
 slist_t* slist = NULL;
@@ -632,10 +675,9 @@ int main(int argc, char **argv) {
     perror("Error to calloc slist requests");
   }
   slist_init(slist);
-  // printf("Init TALLOC_CTX\n");
   TALLOC_CTX *ctx = NULL;
   /* 
-    * main loop: wait for a datagram, then echo it
+    * main loop: wait for a MySignal
   */
   while (init_android()!=0)
   {
@@ -653,6 +695,7 @@ int main(int argc, char **argv) {
     fr_ipaddr_t *src_ipaddr = (fr_ipaddr_t*)malloc(sizeof(fr_ipaddr_t));
     uint16_t *src_port =NULL;
     int nbytes;
+    char recvline[100];
     printf("> Ready For Requests...\n");
     printf("-----------------------------------------\n");
     while (1) {
@@ -703,34 +746,49 @@ int main(int argc, char **argv) {
          perror("validate_packet_radius");
          break;
       }
-      if (flag_android==1)
+      
+      if (init_ip(ip,packet->buf) != 2) 
       {
-        int err = send(client_fd, packet->buf, read_fd, 0);
-        if (err < 0) 
-        {
-          printf("> The android device close the connection...\n");
-          return -1;
-        }
-        else
-        {
-          printf("> Waiting to device for accept the user...\n");
-          read_fd = recv(client_fd, buf_android, 4096, 0);
-          if (strcmp(buf_android,"no\n"))
-          {
-            printf("> The Admin reject the packet...\n");
-            continue;
-          }
-        }
+        continue;
       }
-      else
+      send(sockfd,packet->buf,read_fd,0);
+      memset(recvline,'\0',100);
+      recv(sockfd, recvline, sizeof(recvline), 0);
+      printf(" > Yoad ----------------- >>> %c and size is : %d\n\n", recvline[0],strlen(recvline));
+      // read(sockfd,recvline,100);
+      if (strlen(recvline)>10)
       {
-        int err = send(client_fd, packet->buf, read_fd, 0);
-        if (err < 0) 
-        {
-          printf("> The android device close the connection...\n");
-          return -1;
-        }
+        continue;
       }
+      printf("> Admin Say Yes...\n");
+      // if (flag_android==1)
+      // {
+      //   int err = send(client_fd, packet->buf, read_fd, 0);
+      //   if (err < 0) 
+      //   {
+      //     printf("> The android device close the connection...\n");
+      //     return -1;
+      //   }
+      //   else
+      //   {
+      //     printf("> Waiting to device for accept the user...\n");
+      //     read_fd = recv(client_fd, buf_android, 4096, 0);
+      //     if (strcmp(buf_android,"no\n"))
+      //     {
+      //       printf("> The Admin reject the packet...\n");
+      //       continue;
+      //     }
+      //   }
+      // }
+      // else
+      // {
+      //   int err = send(client_fd, packet->buf, read_fd, 0);
+      //   if (err < 0) 
+      //   {
+      //     printf("> The android device close the connection...\n");
+      //     return -1;
+      //   }
+      // }
       packet->data = talloc_array(packet, uint8_t, packet_len);
       packet->data_len = packet_len;
       if (!packet->data) return -1;

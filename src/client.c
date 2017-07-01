@@ -17,7 +17,7 @@ int main(int argc,char **argv)
     servaddr.sin_family=AF_INET;
     servaddr.sin_port=htons(1337);
  
-    inet_pton(AF_INET,"127.0.0.1",&(servaddr.sin_addr));
+    inet_pton(AF_INET,"192.168.1.141",&(servaddr.sin_addr));
  
     connect(sockfd,(struct sockaddr *)&servaddr,sizeof(servaddr));
  
@@ -30,6 +30,8 @@ int main(int argc,char **argv)
         write(sockfd,sendline,strlen(sendline)+1);
         read(sockfd,recvline,100);
         printf("%s",recvline);
+                write(sockfd,sendline,strlen(sendline)+1);
+
     }
  
 }
